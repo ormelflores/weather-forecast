@@ -22,29 +22,32 @@ class GetForecastAction
         $default_city = $this->defaultCity();
 
         $data = filled($city) ? $city : $default_city;
-
-        $url = "https://weather.cc.api.here.com/weather/1.0/report.json";
-        $params = $this->setApiRequest($data);
+        $location = json_decode($this->getGeoLocation($data));
         $forecast = '';
 
-        try
+        if(filled($location))
         {
-            $response = $this->connect($url, $params);
-            
-            if($response->successful())
+            $url = "https://api.openweathermap.org/data/2.5/forecast";
+            $params = $this->setApiRequest($location[0]);
+    
+            try
             {
-                $object = json_decode($response->getBody());
-                $forecast = $object->dailyForecasts->forecastLocation;
+                $response = $this->connect($url, $params);
+                
+                if($response->successful())
+                {
+                    $forecast = json_decode($response);
+                }
             }
-        }
-        catch(Exception $e)
-        {
-            throw($e);
+            catch(Exception $e)
+            {
+                throw($e);
+            }
         }
 
         return [
             'forecast' => $forecast,
-            'city' => $city
+            'city' => $data
         ];
     }
 
@@ -74,17 +77,16 @@ class GetForecastAction
     /**
      * Set api request.
      * 
-     * @param string $city
+     * @param mixed $location
      * @return array
      */
-    protected function setApiRequest($city): array
+    protected function setApiRequest($location): array
     {
         return [
-            'product' => 'forecast_7days_simple',
-            'name' => $city,
-            'language' => 'en-US',
-            'apiKey' => config('weather.app_key'),
-            'app_id' => config("weather.app_id")
+            'lat' => $location->lat,
+            'lon' => $location->lon,
+            'units' => 'metric',
+            'appid' => config('weather.app_key')
         ];
     }
 
@@ -96,6 +98,31 @@ class GetForecastAction
      */
     protected function connect($url, $params)
     {
-        return Http::get($url, $params);
+        return Http::asForm()->get($url, $params);
+    }
+
+    /**
+     * Coordinates by location name
+     * 
+     * @param string $city
+     */
+    protected function getGeoLocation($city)
+    {
+        return Http::get("http://api.openweathermap.org/geo/1.0/direct", $this->setGeoLocationApiRequest($city));
+    }
+
+    /**
+     * Set geo location api request.
+     * 
+     * @param string $city
+     * @return array
+     */
+    protected function setGeoLocationApiRequest($city): array
+    {
+        return [
+            'q' => $city,
+            'limit' => 1,
+            'appid' => config('weather.app_key')
+        ];
     }
 }
